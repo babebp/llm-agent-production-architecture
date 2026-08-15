@@ -1,8 +1,13 @@
 # Production LLM Agent Architecture (Open-Source Stack)
 
-A deliberately **minimal** reference implementation of a production LLM agent
-architecture — single agent today, with the boundaries already drawn for
-multi-agent (see Scaling path). Every component is the smallest thing that demonstrates the
+A small but production-style LLM agent stack — single agent today, with the
+boundaries already drawn for multi-agent (see Scaling path).
+
+> **How this was built:** the architecture, component choices, and trade-offs
+> are mine — that thinking is written down in the [ADRs](docs/adr/), which are
+> the point of this repo. The implementation code was written by Claude from
+> that design (AI writes code fast; deciding *what* to build and *why* is the
+> part that still needs a human). Every component is the smallest thing that demonstrates the
 production concern it stands for — the value here is the *architecture and
 the decisions*, not the line count.
 
