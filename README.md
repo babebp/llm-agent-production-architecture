@@ -1,6 +1,7 @@
 # Production LLM Agent Architecture (Open-Source Stack)
 
-How this was built: the architecture, component choices, and trade-offs are mine — that thinking is written down in the ADRs, which are the point of this repo. The implementation code was written by Claude from that design (AI writes code fast; deciding what to build and why is the part that still needs a human).
+[![CI](https://github.com/babebp/llm-agent-production-architecture/actions/workflows/ci.yml/badge.svg)](https://github.com/babebp/llm-agent-production-architecture/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A small but production-style LLM agent stack — single agent today, with the
 boundaries already drawn for multi-agent (see Scaling path).
@@ -80,19 +81,46 @@ docker compose exec mcp python ingest.py   # index README + ADRs into Qdrant
 open http://localhost:3000
 ```
 
+The first `ingest.py` run downloads the embedding model (~130 MB, one-time);
+give it a minute.
+
 Ask it: *"Why LiteLLM instead of Kong?"* — the agent retrieves the ADR via
 MCP and answers with the source cited.
+
+## Tests & evals
+
+- **Unit/contract tests** (`test_*.py` next to each service, run in CI):
+  chunking edge cases, MCP bearer-auth boundary, `/chat` contract including
+  upstream-failure mapping — no containers or API keys needed.
+- **Retrieval eval**: a golden question set scored as hit-rate@4 against the
+  live index — catches regressions from chunking/embedding/corpus changes
+  without spending LLM tokens:
+
+  ```bash
+  docker compose exec mcp python eval_retrieval.py
+  ```
 
 ## Repository layout
 
 ```
 apps/web/              Next.js UI + server-side proxy route
 services/agent/        LangGraph ReAct agent (FastAPI, MCP client, Langfuse)
-services/mcp-qdrant/   MCP server wrapping Qdrant + ingest script
+services/mcp-qdrant/   MCP server wrapping Qdrant + ingest + retrieval eval
 gateway/               LiteLLM config (models, master key)
 docs/adr/              Architecture Decision Records
+.github/workflows/     CI: per-service tests + web build
 docker-compose.yml     Full stack, healthchecks, internal-only networking
 ```
+
+## Deliberate omissions
+
+- **No streaming**: `/chat` returns the whole reply. ReAct + RAG latency is
+  dominated by tool-call round trips, and SSE plumbing through proxy + agent
+  would double the demo's surface for zero architectural signal. Adding it is
+  contained: LangGraph `astream` in the agent, an SSE route in the proxy.
+- **No request timeouts/rate limits at the proxy**: the trust boundary is
+  enforced by validation at the agent and auth on every internal hop;
+  timeout/rate policy belongs to the ingress layer this demo doesn't have.
 
 ## Scaling path (documented, intentionally not built)
 
