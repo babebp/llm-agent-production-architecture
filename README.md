@@ -101,7 +101,9 @@ MCP and answers with the source cited.
   upstream-failure mapping — no containers or API keys needed.
 - **Retrieval eval**: a golden question set scored as hit-rate@4 against the
   live index — catches regressions from chunking/embedding/corpus changes
-  without spending LLM tokens:
+  without spending LLM tokens. **It gates CI**: every push re-indexes the
+  corpus into a throwaway Qdrant and fails the build below 80% hit-rate.
+  Locally:
 
   ```bash
   docker compose exec mcp python eval_retrieval.py
