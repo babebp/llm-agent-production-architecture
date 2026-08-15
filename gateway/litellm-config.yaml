@@ -12,6 +12,13 @@ model_list:
       model: anthropic/claude-sonnet-5
       api_key: os.environ/ANTHROPIC_API_KEY
 
+  # Alternative provider — the swap ADR-0001/0002 promise: set
+  # LLM_MODEL=chat-openai on the agent, zero code changes.
+  - model_name: chat-openai
+    litellm_params:
+      model: openai/gpt-5-mini
+      api_key: os.environ/OPENAI_API_KEY
+
 litellm_settings:
   drop_params: true
 

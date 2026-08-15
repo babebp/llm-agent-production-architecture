@@ -16,7 +16,8 @@ services:
     volumes:
       - ./gateway/litellm-config.yaml:/config.yaml:ro
     environment:
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
     ports:
       - "4000:4000" # exposed for local inspection; keep internal in production
@@ -49,7 +50,8 @@ services:
     environment:
       LITELLM_BASE_URL: http://litellm:4000
       LITELLM_API_KEY: ${LITELLM_API_KEY}
-      LLM_MODEL: chat
+      # chat (Claude) | chat-mini | chat-openai — provider swap without code changes
+      LLM_MODEL: ${LLM_MODEL:-chat}
       MCP_URL: http://mcp:8080/mcp
       MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
