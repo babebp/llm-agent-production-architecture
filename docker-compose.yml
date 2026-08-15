@@ -11,7 +11,7 @@ services:
       retries: 10
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-stable
+    image: ghcr.io/berriai/litellm:main-v1.83.14-stable
     command: ["--config", "/config.yaml", "--port", "4000"]
     volumes:
       - ./gateway/litellm-config.yaml:/config.yaml:ro
