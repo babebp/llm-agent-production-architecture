@@ -1,7 +1,8 @@
-# Production-Minded Multi-Agent Architecture (Open-Source Stack)
+# Production LLM Agent Architecture (Open-Source Stack)
 
 A deliberately **minimal** reference implementation of a production LLM agent
-architecture. Every component is the smallest thing that demonstrates the
+architecture — single agent today, with the boundaries already drawn for
+multi-agent (see Scaling path). Every component is the smallest thing that demonstrates the
 production concern it stands for — the value here is the *architecture and
 the decisions*, not the line count.
 
