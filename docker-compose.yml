@@ -1,0 +1,80 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.18.3
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    # not published — only reachable inside the compose network
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    command: ["--config", "/config.yaml", "--port", "4000"]
+    volumes:
+      - ./gateway/litellm-config.yaml:/config.yaml:ro
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+    ports:
+      - "4000:4000" # exposed for local inspection; keep internal in production
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mcp:
+    build: services/mcp-qdrant
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN}
+    volumes:
+      # corpus for `docker compose exec mcp python ingest.py`
+      - ./README.md:/corpus/README.md:ro
+      - ./docs:/corpus/docs:ro
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  agent:
+    build: services/agent
+    environment:
+      LITELLM_BASE_URL: http://litellm:4000
+      LITELLM_API_KEY: ${LITELLM_API_KEY}
+      LLM_MODEL: chat
+      MCP_URL: http://mcp:8080/mcp
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
+    depends_on:
+      litellm:
+        condition: service_healthy
+      mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: apps/web
+    environment:
+      AGENT_URL: http://agent:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      agent:
+        condition: service_healthy
+
+volumes:
+  qdrant_storage:

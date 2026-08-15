@@ -1,0 +1,19 @@
+# LiteLLM proxy config — the single choke point between agents and providers.
+# Agents never see ANTHROPIC_API_KEY; they hold a LiteLLM key only.
+model_list:
+  - model_name: chat
+    litellm_params:
+      model: anthropic/claude-opus-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # Cheaper tier — swap LLM_MODEL=chat-mini on the agent to use it.
+  - model_name: chat-mini
+    litellm_params:
+      model: anthropic/claude-sonnet-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
