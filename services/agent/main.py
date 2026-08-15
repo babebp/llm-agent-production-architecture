@@ -18,7 +18,7 @@ from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel
 
 SYSTEM_PROMPT = (
-    "You are an assistant for this repository's production multi-agent "
+    "You are an assistant for this repository's production LLM agent "
     "architecture. Answer questions about the architecture, its components, "
     "and the design decisions behind it. Use the search_docs tool to ground "
     "answers in the actual documentation, and cite the source file."
