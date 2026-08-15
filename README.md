@@ -1,5 +1,7 @@
 # Production LLM Agent Architecture (Open-Source Stack)
 
+How this was built: the architecture, component choices, and trade-offs are mine — that thinking is written down in the ADRs, which are the point of this repo. The implementation code was written by Claude from that design (AI writes code fast; deciding what to build and why is the part that still needs a human).
+
 A small but production-style LLM agent stack — single agent today, with the
 boundaries already drawn for multi-agent (see Scaling path).
 
