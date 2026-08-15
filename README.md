@@ -17,6 +17,13 @@ the decisions*, not the line count.
 **Demo app:** a RAG agent that answers questions about this repository's own
 architecture (the ADRs and this README are the corpus).
 
+![Chat UI — agent answers with the ADR cited](docs/img/chat-ui.png)
+
+Every run is fully traced in Langfuse — each agent step, `search_docs` tool
+call, and LLM call with latency and token usage:
+
+![Langfuse traces of an agent run](docs/img/langfuse-traces.png)
+
 ## Architecture
 
 ```mermaid
