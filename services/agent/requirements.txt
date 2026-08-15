@@ -1,6 +1,7 @@
 fastapi>=0.115
 uvicorn>=0.30
 langgraph>=0.4
+langchain>=0.3          # required by langfuse.langchain callback
 langchain-openai>=0.3
 langchain-mcp-adapters>=0.1
 langfuse>=3.0
