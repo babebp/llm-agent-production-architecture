@@ -40,6 +40,7 @@ flowchart LR
     end
     subgraph gateway
         L[LiteLLM Gateway<br/>keys · budgets · fallbacks]
+        G[(Postgres<br/>virtual keys · spend)]
     end
     P[Provider API<br/>Claude]
     O[Langfuse Cloud<br/>traces · cost]
@@ -48,6 +49,7 @@ flowchart LR
     A -->|MCP streamable HTTP| M
     M --> Q
     A -->|OpenAI-compatible| L
+    L --> G
     L --> P
     A -.->|traces| O
 ```
@@ -58,7 +60,7 @@ flowchart LR
 | Agent runtime | LangGraph | ReAct agent + checkpointer for session memory |
 | Tooling protocol | MCP | Vector DB exposed as a pluggable capability ([ADR-0003](docs/adr/0003-vector-db-as-mcp-server.md)) |
 | Vector DB | Qdrant | Single container, local embeddings via fastembed ([ADR-0005](docs/adr/0005-local-embeddings-fastembed.md)) |
-| AI gateway | LiteLLM | Credential isolation, virtual keys, cost tracking ([ADR-0002](docs/adr/0002-litellm-over-kong.md)) |
+| AI gateway | LiteLLM + Postgres | Credential isolation, virtual keys, per-key spend ([ADR-0002](docs/adr/0002-litellm-over-kong.md), [ADR-0006](docs/adr/0006-db-backed-gateway-virtual-keys.md)) |
 | Model serving | Provider API | No vLLM — and exactly when we'd add it ([ADR-0001](docs/adr/0001-api-llm-behind-gateway-not-vllm.md)) |
 | Observability | Langfuse Cloud | Full traces without four extra stateful containers ([ADR-0004](docs/adr/0004-langfuse-cloud-over-self-host.md)) |
 
@@ -74,10 +76,18 @@ are the point of this repo.
 - **Minimal network exposure**: only the UI (`:3000`) and the gateway
   (`:4000`, for local inspection) are published; Qdrant, MCP, and the agent
   are compose-network-internal.
+- **Three credential tiers** ([ADR-0006](docs/adr/0006-db-backed-gateway-virtual-keys.md)):
+  provider keys → LiteLLM master key (ops only) → per-app **virtual keys**
+  with budgets and rate limits. The agent's key burns at most its budget and
+  rotates with one script:
+
+  ```bash
+  ./gateway/issue-key.sh   # budgeted, rate-limited key for the agent
+  ```
 - **No secrets in the repo** — `.env` from `.env.example`; production swaps
   this for a secret manager (Secrets Manager / Vault / SOPS).
-- Production hardening documented, not demo-blocking: DB-backed LiteLLM
-  virtual keys with budgets + rate limits, OAuth on the MCP server, TLS.
+- Remaining hardening, documented not demo-blocking: OAuth on the MCP
+  server, TLS.
 
 ## Quickstart
 
@@ -115,7 +125,7 @@ MCP and answers with the source cited.
 apps/web/              Next.js UI + server-side proxy route
 services/agent/        LangGraph ReAct agent (FastAPI, MCP client, Langfuse)
 services/mcp-qdrant/   MCP server wrapping Qdrant + ingest + retrieval eval
-gateway/               LiteLLM config (models, master key)
+gateway/               LiteLLM config + virtual-key issuance (issue-key.sh)
 docs/adr/              Architecture Decision Records
 .github/workflows/     CI: per-service tests + web build
 docker-compose.yml     Full stack, healthchecks, internal-only networking
