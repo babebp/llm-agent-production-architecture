@@ -19,7 +19,8 @@ services:
       POSTGRES_DB: litellm
     volumes:
       - litellm_pg:/var/lib/postgresql/data
-    # not published — only the gateway talks to it
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # not published — only the gateway and the agent reach it
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
       interval: 5s
@@ -74,6 +75,8 @@ services:
       LLM_MODEL: ${LLM_MODEL:-chat}
       MCP_URL: http://mcp:8080/mcp
       MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN}
+      # session checkpoints (ADR-0007); unset → in-memory fallback
+      CHECKPOINT_DB_URL: postgresql://litellm:${LITELLM_PG_PASSWORD}@postgres:5432/agent_state
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
@@ -81,6 +84,8 @@ services:
       litellm:
         condition: service_healthy
       mcp:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
