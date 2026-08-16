@@ -1,6 +1,7 @@
 # ADR-0002: LiteLLM as the AI gateway instead of Kong
 
-Status: accepted
+Status: accepted — amended by [ADR-0006](0006-db-backed-gateway-virtual-keys.md)
+(virtual keys are now implemented, no longer deferred)
 
 ## Context
 
