@@ -40,8 +40,8 @@ flowchart LR
     end
     subgraph gateway
         L[LiteLLM Gateway<br/>keys · budgets · fallbacks]
-        G[(Postgres<br/>virtual keys · spend)]
     end
+    G[(Postgres<br/>keys · spend · checkpoints)]
     P[Provider API<br/>Claude]
     O[Langfuse Cloud<br/>traces · cost]
 
@@ -49,6 +49,7 @@ flowchart LR
     A -->|MCP streamable HTTP| M
     M --> Q
     A -->|OpenAI-compatible| L
+    A -->|session state| G
     L --> G
     L --> P
     A -.->|traces| O
@@ -57,7 +58,7 @@ flowchart LR
 | Concern | Component | Why this one |
 |---|---|---|
 | UI | Next.js 15 | Server-side proxy route; browser never reaches the agent network |
-| Agent runtime | LangGraph | ReAct agent + checkpointer for session memory |
+| Agent runtime | LangGraph | ReAct agent, Postgres-backed session memory ([ADR-0007](docs/adr/0007-postgres-agent-checkpointer.md)) |
 | Tooling protocol | MCP | Vector DB exposed as a pluggable capability ([ADR-0003](docs/adr/0003-vector-db-as-mcp-server.md)) |
 | Vector DB | Qdrant | Single container, local embeddings via fastembed ([ADR-0005](docs/adr/0005-local-embeddings-fastembed.md)) |
 | AI gateway | LiteLLM + Postgres | Credential isolation, virtual keys, per-key spend ([ADR-0002](docs/adr/0002-litellm-over-kong.md), [ADR-0006](docs/adr/0006-db-backed-gateway-virtual-keys.md)) |
@@ -126,6 +127,7 @@ apps/web/              Next.js UI + server-side proxy route
 services/agent/        LangGraph ReAct agent (FastAPI, MCP client, Langfuse)
 services/mcp-qdrant/   MCP server wrapping Qdrant + ingest + retrieval eval
 gateway/               LiteLLM config + virtual-key issuance (issue-key.sh)
+postgres/              init.sql: gateway DB + agent checkpoint DB
 docs/adr/              Architecture Decision Records
 .github/workflows/     CI: per-service tests + web build
 docker-compose.yml     Full stack, healthchecks, internal-only networking
@@ -146,8 +148,9 @@ docker-compose.yml     Full stack, healthchecks, internal-only networking
 - **Kubernetes/EKS**: each service is already a stateless container with a
   healthcheck; compose services map 1:1 to Deployments, Qdrant to a
   StatefulSet or managed Qdrant Cloud.
-- **Agent state**: swap LangGraph's in-memory checkpointer for the
-  Postgres/Redis saver to scale the agent horizontally.
+- **Agent state**: done — checkpoints live in Postgres
+  ([ADR-0007](docs/adr/0007-postgres-agent-checkpointer.md)), so the agent
+  is stateless and horizontal scale is a replica count.
 - **Self-hosted models**: add a vLLM backend as a LiteLLM `model_list` entry
   — zero agent changes (ADR-0001).
 - **Multi-agent**: additional agents join as new services consuming the same
