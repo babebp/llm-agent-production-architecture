@@ -10,6 +10,22 @@ services:
       timeout: 3s
       retries: 10
 
+  # Backs LiteLLM: virtual keys, budgets, per-key spend (ADR-0006)
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${LITELLM_PG_PASSWORD}
+      POSTGRES_DB: litellm
+    volumes:
+      - litellm_pg:/var/lib/postgresql/data
+    # not published — only the gateway talks to it
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.83.14-stable
     command: ["--config", "/config.yaml", "--port", "4000"]
@@ -19,6 +35,10 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      DATABASE_URL: postgresql://litellm:${LITELLM_PG_PASSWORD}@postgres:5432/litellm
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "4000:4000" # exposed for local inspection; keep internal in production
     healthcheck:
@@ -80,3 +100,4 @@ services:
 
 volumes:
   qdrant_storage:
+  litellm_pg:
