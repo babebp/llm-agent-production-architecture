@@ -4,16 +4,19 @@
   holds a LiteLLM key, never a provider key.
 - RAG arrives as MCP tools from the mcp-qdrant server (bearer-auth).
 - Traces go to Langfuse Cloud when LANGFUSE_* keys are set.
+- Session state checkpoints to Postgres when CHECKPOINT_DB_URL is set
+  (ADR-0007); in-memory fallback otherwise.
 """
 
 import os
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel
 
@@ -52,11 +55,20 @@ async def lifespan(app: FastAPI):
         }
     )
     tools = await mcp.get_tools()
-    # ponytail: in-memory checkpointer — swap for Postgres/Redis saver when horizontally scaled
-    state["agent"] = create_react_agent(
-        llm, tools, prompt=SYSTEM_PROMPT, checkpointer=MemorySaver()
-    )
-    yield
+    async with AsyncExitStack() as stack:
+        db_url = os.environ.get("CHECKPOINT_DB_URL")
+        if db_url:
+            # sessions survive restarts; agent replicas stay stateless (ADR-0007)
+            checkpointer = await stack.enter_async_context(
+                AsyncPostgresSaver.from_conn_string(db_url)
+            )
+            await checkpointer.setup()
+        else:
+            checkpointer = MemorySaver()  # dev fallback: state dies with the process
+        state["agent"] = create_react_agent(
+            llm, tools, prompt=SYSTEM_PROMPT, checkpointer=checkpointer
+        )
+        yield
 
 
 app = FastAPI(lifespan=lifespan)
