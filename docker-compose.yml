@@ -77,6 +77,7 @@ services:
       MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN}
       # session checkpoints (ADR-0007); unset → in-memory fallback
       CHECKPOINT_DB_URL: postgresql://litellm:${LITELLM_PG_PASSWORD}@postgres:5432/agent_state
+      A2A_AUTH_TOKEN: ${A2A_AUTH_TOKEN}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
@@ -93,14 +94,50 @@ services:
       timeout: 5s
       retries: 10
 
+  agent-writer:
+    build: services/agent-writer
+    environment:
+      LITELLM_BASE_URL: http://litellm:4000
+      LITELLM_API_KEY: ${LITELLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:-chat}
+      A2A_AUTH_TOKEN: ${A2A_AUTH_TOKEN}
+    depends_on:
+      litellm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # user-facing agent: discovers specialists via A2A agent cards (ADR-0008)
+  orchestrator:
+    build: services/orchestrator
+    environment:
+      LITELLM_BASE_URL: http://litellm:4000
+      LITELLM_API_KEY: ${LITELLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:-chat}
+      A2A_AGENT_URLS: http://agent:8000,http://agent-writer:8000
+      A2A_AUTH_TOKEN: ${A2A_AUTH_TOKEN}
+    depends_on:
+      agent:
+        condition: service_healthy
+      agent-writer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   web:
     build: apps/web
     environment:
-      AGENT_URL: http://agent:8000
+      AGENT_URL: http://orchestrator:8000
     ports:
       - "3000:3000"
     depends_on:
-      agent:
+      orchestrator:
         condition: service_healthy
 
 volumes:

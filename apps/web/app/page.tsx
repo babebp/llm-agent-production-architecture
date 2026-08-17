@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 
-type Msg = { role: "user" | "assistant"; text: string };
+type Msg = { role: "user" | "assistant"; text: string; agent?: string };
 
 export default function Home() {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -27,7 +27,7 @@ export default function Home() {
       const data = await res.json();
       setMessages((m) => [
         ...m,
-        { role: "assistant", text: data.reply ?? data.error ?? "error" },
+        { role: "assistant", text: data.reply ?? data.error ?? "error", agent: data.agent },
       ]);
     } catch (e) {
       setMessages((m) => [...m, { role: "assistant", text: `error: ${e}` }]);
@@ -40,13 +40,13 @@ export default function Home() {
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <h1 style={{ fontSize: 20 }}>Architecture Q&amp;A Agent</h1>
       <p style={{ color: "#8a93a5", fontSize: 14 }}>
-        LangGraph agent → MCP (Qdrant RAG) → LiteLLM gateway → Claude. Ask about this repo&apos;s architecture.
+        Orchestrator → A2A specialists (docs RAG · writer) → LiteLLM gateway. Ask about this repo&apos;s architecture.
       </p>
       <div style={{ flex: 1 }}>
         {messages.map((m, i) => (
           <div key={i} style={{ margin: "12px 0" }}>
             <b style={{ color: m.role === "user" ? "#7aa2f7" : "#9ece6a" }}>
-              {m.role === "user" ? "you" : "agent"}
+              {m.role === "user" ? "you" : m.agent ?? "agent"}
             </b>
             <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{m.text}</div>
           </div>
