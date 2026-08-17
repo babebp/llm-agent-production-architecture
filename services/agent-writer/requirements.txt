@@ -1,0 +1,4 @@
+fastapi>=0.115
+uvicorn>=0.30
+a2a-sdk[http-server]>=1.1
+langchain-openai>=0.3

@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [services/agent, services/mcp-qdrant]
+        service: [services/agent, services/agent-writer, services/mcp-qdrant]
     defaults:
       run:
         working-directory: ${{ matrix.service }}
