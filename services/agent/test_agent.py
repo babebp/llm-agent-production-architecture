@@ -8,6 +8,7 @@ import os
 
 os.environ.setdefault("MCP_AUTH_TOKEN", "test-token")
 os.environ.setdefault("LITELLM_API_KEY", "test-key")
+os.environ.setdefault("A2A_AUTH_TOKEN", "test-a2a-token")
 
 import httpx
 import pytest
@@ -55,6 +56,22 @@ async def test_missing_message_is_422():
     async with client() as c:
         r = await c.post("/chat", json={})
     assert r.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_a2a_card_is_open():
+    async with client() as c:
+        r = await c.get("/.well-known/agent-card.json")
+    assert r.status_code == 200
+    assert r.json()["name"] == "docs-agent"
+
+
+@pytest.mark.anyio
+async def test_a2a_rpc_requires_bearer_token():
+    async with client() as c:
+        assert (await c.post("/a2a", json={})).status_code == 401
+        r = await c.post("/a2a", json={}, headers={"Authorization": "Bearer wrong"})
+        assert r.status_code == 401
 
 
 @pytest.fixture

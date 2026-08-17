@@ -1,5 +1,6 @@
 fastapi>=0.115
 uvicorn>=0.30
+a2a-sdk[http-server]>=1.1
 langgraph>=0.4
 langgraph-checkpoint-postgres>=2.0
 psycopg[binary]>=3.2
