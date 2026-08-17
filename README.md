@@ -3,8 +3,9 @@
 [![CI](https://github.com/babebp/llm-agent-production-architecture/actions/workflows/ci.yml/badge.svg)](https://github.com/babebp/llm-agent-production-architecture/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A small but production-style LLM agent stack — single agent today, with the
-boundaries already drawn for multi-agent (see Scaling path).
+A small but production-style **multi-agent** LLM stack: an orchestrator that
+discovers specialist agents via the A2A protocol, capabilities behind MCP,
+and every LLM call through one gateway.
 
 > **How this was built:** the architecture, component choices, and trade-offs
 > are mine — that thinking is written down in the [ADRs](docs/adr/), which are
@@ -14,8 +15,10 @@ boundaries already drawn for multi-agent (see Scaling path).
 production concern it stands for — the value here is the *architecture and
 the decisions*, not the line count.
 
-**Demo app:** a RAG agent that answers questions about this repository's own
-architecture (the ADRs and this README are the corpus).
+**Demo app:** ask about the architecture and the orchestrator routes to the
+**docs specialist** (RAG over this repo's ADRs and README); ask for a
+rewrite or an ELI5 and it routes to the **writer specialist**. The UI shows
+which agent answered.
 
 ![Chat UI — agent answers with the ADR cited](docs/img/chat-ui.png)
 
@@ -32,7 +35,9 @@ flowchart LR
         W[Next.js UI]
     end
     subgraph agents
-        A[LangGraph Agent<br/>FastAPI]
+        O[Orchestrator<br/>card discovery · routing]
+        A[Docs Agent<br/>LangGraph ReAct]
+        R[Writer Agent<br/>explain · rewrite]
     end
     subgraph capabilities
         M[MCP Server<br/>bearer auth]
@@ -42,23 +47,28 @@ flowchart LR
         L[LiteLLM Gateway<br/>keys · budgets · fallbacks]
     end
     G[(Postgres<br/>keys · spend · checkpoints)]
-    P[Provider API<br/>Claude]
-    O[Langfuse Cloud<br/>traces · cost]
+    P[Provider API<br/>Claude / OpenAI]
+    F[Langfuse Cloud<br/>traces · cost]
 
-    W -->|/api/chat proxy| A
+    W -->|/api/chat proxy| O
+    O -->|A2A| A
+    O -->|A2A| R
     A -->|MCP streamable HTTP| M
     M --> Q
-    A -->|OpenAI-compatible| L
+    O --> L
+    A --> L
+    R --> L
     A -->|session state| G
     L --> G
     L --> P
-    A -.->|traces| O
+    A -.->|traces| F
 ```
 
 | Concern | Component | Why this one |
 |---|---|---|
 | UI | Next.js 15 | Server-side proxy route; browser never reaches the agent network |
-| Agent runtime | LangGraph | ReAct agent, Postgres-backed session memory ([ADR-0007](docs/adr/0007-postgres-agent-checkpointer.md)) |
+| Agent interop | A2A | Card discovery + delegation; any framework can join by publishing a card ([ADR-0008](docs/adr/0008-a2a-for-agent-interop.md)) |
+| Agent runtime | LangGraph | ReAct docs specialist, Postgres-backed session memory ([ADR-0007](docs/adr/0007-postgres-agent-checkpointer.md)) |
 | Tooling protocol | MCP | Vector DB exposed as a pluggable capability ([ADR-0003](docs/adr/0003-vector-db-as-mcp-server.md)) |
 | Vector DB | Qdrant | Single container, local embeddings via fastembed ([ADR-0005](docs/adr/0005-local-embeddings-fastembed.md)) |
 | AI gateway | LiteLLM + Postgres | Credential isolation, virtual keys, per-key spend ([ADR-0002](docs/adr/0002-litellm-over-kong.md), [ADR-0006](docs/adr/0006-db-backed-gateway-virtual-keys.md)) |
@@ -72,8 +82,9 @@ are the point of this repo.
 
 - **Provider keys exist in exactly one place** — the LiteLLM container. The
   agent holds a LiteLLM key; the UI holds nothing.
-- **Every internal hop is authenticated**: agent → MCP uses a bearer token;
-  agent → gateway uses a LiteLLM key.
+- **Every internal hop is authenticated**: orchestrator → specialists uses
+  an A2A bearer token (agent cards stay open for discovery); agent → MCP
+  uses a bearer token; every agent → gateway uses a LiteLLM key.
 - **Minimal network exposure**: only the UI (`:3000`) and the gateway
   (`:4000`, for local inspection) are published; Qdrant, MCP, and the agent
   are compose-network-internal.
@@ -108,7 +119,8 @@ MCP and answers with the source cited.
 ## Tests & evals
 
 - **Unit/contract tests** (`test_*.py` next to each service, run in CI):
-  chunking edge cases, MCP bearer-auth boundary, `/chat` contract including
+  chunking edge cases, MCP and A2A auth boundaries, orchestrator routing +
+  delegation (session_id → A2A context_id), `/chat` contract including
   upstream-failure mapping — no containers or API keys needed.
 - **Retrieval eval**: a golden question set scored as hit-rate@4 against the
   live index — catches regressions from chunking/embedding/corpus changes
@@ -124,7 +136,9 @@ MCP and answers with the source cited.
 
 ```
 apps/web/              Next.js UI + server-side proxy route
-services/agent/        LangGraph ReAct agent (FastAPI, MCP client, Langfuse)
+services/orchestrator/ User-facing agent: A2A card discovery + LLM routing
+services/agent/        Docs specialist: LangGraph ReAct (MCP RAG, checkpointer)
+services/agent-writer/ Writer specialist: explain/rewrite, no tools
 services/mcp-qdrant/   MCP server wrapping Qdrant + ingest + retrieval eval
 gateway/               LiteLLM config + virtual-key issuance (issue-key.sh)
 postgres/              init.sql: gateway DB + agent checkpoint DB
@@ -142,6 +156,8 @@ docker-compose.yml     Full stack, healthchecks, internal-only networking
 - **No request timeouts/rate limits at the proxy**: the trust boundary is
   enforced by validation at the agent and auth on every internal hop;
   timeout/rate policy belongs to the ingress layer this demo doesn't have.
+- **A2A `message/send` only**: no long-running task lifecycle, streaming,
+  or push notifications until an agent needs them (ADR-0008).
 
 ## Scaling path (documented, intentionally not built)
 
@@ -153,5 +169,7 @@ docker-compose.yml     Full stack, healthchecks, internal-only networking
   is stateless and horizontal scale is a replica count.
 - **Self-hosted models**: add a vLLM backend as a LiteLLM `model_list` entry
   — zero agent changes (ADR-0001).
-- **Multi-agent**: additional agents join as new services consuming the same
-  MCP capabilities and gateway; the boundaries are already drawn for it.
+- **Multi-agent**: done — orchestrator + two specialists over A2A
+  ([ADR-0008](docs/adr/0008-a2a-for-agent-interop.md)). The next agent is a
+  new service publishing a card plus one URL in `A2A_AGENT_URLS` — no
+  orchestrator code changes.
